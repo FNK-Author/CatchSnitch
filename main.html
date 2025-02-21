@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Snitch Catching Game by FNK</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #1e1e2f;
+            color: black;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin: 20px;
+            color: white;
+        }
+        #gameContainer {
+            position: relative;
+            width: 80%;
+            height: 0;
+            padding-bottom: 45%;
+            margin: 0 auto;
+            background-color: #fff;
+            border: 3px solid #fff;
+            overflow: hidden;
+        }
+        #harry {
+            position: absolute;
+            width: 90px; /* Verkleinerte Harry Größe */
+            height: 90px; /* Verkleinerte Harry Größe */
+            background-image: url('https://i.imgur.com/ToGxGV8.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            display: none;
+        }
+        .snitch {
+            position: absolute;
+            width: 80px; /* Größere Snitches */
+            height: 80px; /* Größere Snitches */
+            background-image: url('https://i.imgur.com/z3c0pHv.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+        .bludger {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background-image: url('https://i.imgur.com/gd1VTKX.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+        #start {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #1e1e2f; /* Blaue Hintergrundfarbe */
+            color: white;
+            border: 2px solid #fff;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 40px; /* Vergrößerter Text */
+        }
+        .red-text {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Golden Snitch Catching Game by FNK</h1>
+    <div id="gameContainer">
+        <div id="harry"></div>
+        <div id="score">Score: 0 | Lives: 10</div>
+        <button id="start" onclick="startGame()">Play</button>
+    </div>
+
+    <script>
+        const harry = document.getElementById('harry');
+        const gameContainer = document.getElementById('gameContainer');
+        const scoreDisplay = document.getElementById('score');
+        const startButton = document.getElementById('start');
+        let score = 0;
+        let lives = 10;
+        let speedMultiplier = 1.2;
+        let snitchSpeed = 1; // Erhöhte Startgeschwindigkeit
+        let bludgerSpeed = 1; // Erhöhte Startgeschwindigkeit
+        let spawnInterval = 500; // Initial spawn interval (1 second)
+        let snitchInterval;
+        let bludgerInterval;
+        let gameStarted = false;
+        let snitches = [];
+        let bludgers = [];
+
+        function moveHarryToMouse(event) {
+            const rect = gameContainer.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            const harryX = Math.max(0, Math.min(mouseX - harry.offsetWidth / 2, gameContainer.offsetWidth - harry.offsetWidth));
+            const harryY = Math.max(0, Math.min(mouseY - harry.offsetHeight / 2, gameContainer.offsetHeight - harry.offsetHeight));
+            harry.style.left = harryX + 'px';
+            harry.style.top = harryY + 'px';
+        }
+
+        function updateHarryOrientation() {
+            const lowestSnitch = snitches.reduce((lowest, snitch) => 
+                snitch.offsetTop > lowest.offsetTop ? snitch : lowest, 
+                { offsetTop: -Infinity }
+            );
+
+            if (lowestSnitch) {
+                const snitchX = lowestSnitch.offsetLeft + lowestSnitch.offsetWidth / 2;
+                const harryX = harry.offsetLeft + harry.offsetWidth / 2;
+                harry.style.transform = snitchX < harryX ? 'scaleX(-1)' : 'scaleX(1)';
+            }
+        }
+
+        function createSnitch() {
+            if (!gameStarted) return;
+
+            const snitch = document.createElement('div');
+            snitch.classList.add('snitch');
+
+            let snitchLeft;
+            do {
+                snitchLeft = Math.random() * (gameContainer.offsetWidth - 80); // Updated for new Snitch size
+            } while (isOverlapping(snitchLeft, 80)); // Updated for new Snitch size
+
+            snitch.style.left = snitchLeft + 'px';
+            snitch.style.top = '-80px'; // Updated for new Snitch size
+            snitch.fallSpeed = snitchSpeed;
+
+            gameContainer.appendChild(snitch);
+            snitches.push(snitch);
+
+            function fall() {
+                if (!gameStarted) return;
+
+                snitch.style.top = snitch.offsetTop + snitch.fallSpeed * speedMultiplier + 'px';
+                updateHarryOrientation();
+
+                if (snitch.offsetTop > gameContainer.offsetHeight) {
+                    gameContainer.removeChild(snitch);
+                    snitches = snitches.filter(s => s !== snitch);
+                    loseLife();
+                } else if (collisionCheck(snitch, harry)) {
+                    gameContainer.removeChild(snitch);
+                    snitches = snitches.filter(s => s !== snitch);
+                    increaseScore();
+                } else {
+                    requestAnimationFrame(fall);
+                }
+            }
+            requestAnimationFrame(fall);
+        }
+
+        function createBludger() {
+            if (!gameStarted) return;
+
+            const bludger = document.createElement('div');
+            bludger.classList.add('bludger');
+
+            let bludgerLeft;
+            do {
+                bludgerLeft = Math.random() * (gameContainer.offsetWidth - 60);
+            } while (isOverlapping(bludgerLeft, 60));
+
+            bludger.style.left = bludgerLeft + 'px';
+            bludger.style.top = '-60px';
+            bludger.fallSpeed = bludgerSpeed;
+
+            gameContainer.appendChild(bludger);
+            bludgers.push(bludger);
+
+            function fall() {
+                if (!gameStarted) return;
+
+                bludger.style.top = bludger.offsetTop + bludger.fallSpeed * speedMultiplier + 'px';
+
+                if (bludger.offsetTop > gameContainer.offsetHeight) {
+                    gameContainer.removeChild(bludger);
+                    bludgers = bludgers.filter(b => b !== bludger);
+                } else if (collisionCheck(bludger, harry)) {
+                    gameContainer.removeChild(bludger);
+                    bludgers = bludgers.filter(b => b !== bludger);
+                    loseLife();
+                } else {
+                    requestAnimationFrame(fall);
+                }
+            }
+            requestAnimationFrame(fall);
+        }
+
+        function isOverlapping(leftPosition, width) {
+            for (let snitch of snitches) {
+                const snitchLeft = snitch.offsetLeft;
+                if (Math.abs(snitchLeft - leftPosition) < width) {
+                    return true;
+                }
+            }
+            for (let bludger of bludgers) {
+                const bludgerLeft = bludger.offsetLeft;
+                if (Math.abs(bludgerLeft - leftPosition) < width) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function collisionCheck(element, target) {
+            const elementRect = element.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            return !(
+                elementRect.bottom < targetRect.top ||
+                elementRect.top > targetRect.bottom ||
+                elementRect.right < targetRect.left ||
+                elementRect.left > targetRect.right
+            );
+        }
+
+        function increaseScore() {
+            score++;
+            snitchSpeed *= 1.01; // Langsamere Erhöhung der Snitch-Geschwindigkeit
+            bludgerSpeed *= 1.01; // Langsamere Erhöhung der Bludger-Geschwindigkeit
+
+            // Update fall speed for existing snitches and bludgers
+            snitches.forEach(snitch => snitch.fallSpeed = snitchSpeed);
+            bludgers.forEach(bludger => bludger.fallSpeed = bludgerSpeed);
+
+            if (snitchInterval) {
+                clearInterval(snitchInterval);
+            }
+            spawnInterval = Math.max(200, 1000 - (snitchSpeed - 0.7) * 100);
+            snitchInterval = setInterval(createSnitch, spawnInterval);
+
+            scoreDisplay.textContent = `Score: ${score} | Lives: ${lives}`;
+        }
+
+        function loseLife() {
+            lives--;
+            scoreDisplay.classList.add('red-text');
+            setTimeout(() => {
+                scoreDisplay.classList.remove('red-text');
+            }, 400); // 0.4 Sekunden rot färben
+            if (lives <= 0) {
+                endGame();
+            } else {
+                scoreDisplay.textContent = `Score: ${score} | Lives: ${lives}`;
+            }
+        }
+
+        function endGame() {
+            gameStarted = false;
+            clearInterval(snitchInterval);
+            clearInterval(bludgerInterval);
+            document.querySelectorAll('.snitch').forEach(s => s.remove());
+            document.querySelectorAll('.bludger').forEach(b => b.remove());
+            snitches = [];
+            bludgers = [];
+            startButton.style.display = 'block';
+            startButton.style.backgroundColor = '#1e1e2f'; // Blaue Hintergrundfarbe
+            scoreDisplay.textContent = `Score: ${score} | Lives: 0`;
+            document.body.style.cursor = 'auto'; // Cursor wieder einblenden
+        }
+
+        function startGame() {
+            if (gameStarted) return;
+
+            gameStarted = true;
+            startButton.style.display = 'none';
+            startButton.style.backgroundColor = '#1e1e2f'; // Blaue Hintergrundfarbe
+            harry.style.display = 'block';
+            score = 0;
+            lives = 5; // Erhöhte Leben
+            snitchSpeed = 2; // Erhöhte Startgeschwindigkeit
+            bludgerSpeed = 2; // Erhöhte Startgeschwindigkeit
+            speedMultiplier = 1;
+            spawnInterval = 500;
+            snitchInterval = setInterval(createSnitch, spawnInterval);
+            bludgerInterval = setInterval(createBludger, 2000); // Weniger Bludger zu Beginn
+            scoreDisplay.textContent = `Score: ${score} | Lives: ${lives}`;
+            document.body.style.cursor = 'none'; // Cursor verstecken
+        }
+
+        document.addEventListener('mousemove', moveHarryToMouse);
+        startButton.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
